@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "shaangoswami/n8n-image" //1
-        DOCKER_TAG = "v1"
+        // The image you already pushed to Docker Hub
+        DOCKER_IMAGE = "shaangoswami/n8n-image" 
+        DOCKER_TAG = "v1" 
         KUBE_NAMESPACE = "default"
     }
 
@@ -14,40 +15,27 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
-                }
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    docker.withRegistry('', 'docker-hub-creds') {
-                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
-                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push("latest")
-                    }
-                }
-            }
-        }
-
         stage('Deploy to Kubernetes') {
             steps {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
-                    sh """
-                    # Replace the placeholder image in deployment.yaml with the new built image
-                    sed -i 's|replace-me-image:tag|${DOCKER_IMAGE}:${DOCKER_TAG}|g' k8s/n8n-deployment.yaml
-                    
-                    # Apply the changes
-                    kubectl apply -f k8s/n8n-pvc.yaml -n ${KUBE_NAMESPACE}
-                    kubectl apply -f k8s/n8n-deployment.yaml -n ${KUBE_NAMESPACE}
-                    kubectl apply -f k8s/n8n-service.yaml -n ${KUBE_NAMESPACE}
-                    
-                    # Force restart to ensure new image is pulled
-                    kubectl rollout status deployment/n8n -n ${KUBE_NAMESPACE}
-                    """
+                withKubeConfig([credentialsId: 'my-k8s-config']) {
+                    // Tell Jenkins to work inside the subfolder where your YAMLs are
+                    dir('n8n/n8n') {
+                        sh """
+                        echo "Deploying image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                        
+                        # Update deployment.yaml with the exact image and tag
+                        sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' k8s/n8n-deployment.yaml
+                        
+                        # Apply the Kubernetes files
+                        kubectl apply -f k8s/ -n ${KUBE_NAMESPACE}
+                        
+                        # Force a restart so the pod picks up the change immediately
+                        kubectl rollout restart deployment/n8n -n ${KUBE_NAMESPACE}
+                        
+                        # Wait for the deployment to finish
+                        kubectl rollout status deployment/n8n -n ${KUBE_NAMESPACE}
+                        """
+                    }
                 }
             }
         }
