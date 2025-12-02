@@ -24,10 +24,10 @@ pipeline {
                         echo "Deploying image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
                         
                         # Update deployment.yaml with the exact image and tag
-                        sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' n8n/deployment.yaml
+                        sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' deployment.yaml
                         
                         # Apply the Kubernetes files
-                        kubectl apply -f n8n/ -n ${KUBE_NAMESPACE}
+                        kubectl apply -f . -n ${KUBE_NAMESPACE}
                         
                         # Force a restart so the pod picks up the change immediately
                         kubectl rollout restart deployment/n8n -n ${KUBE_NAMESPACE}
