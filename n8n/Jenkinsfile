@@ -11,36 +11,32 @@ pipeline {
                 checkout scm
             }
         }
-         stage('Deploy to Kubernetes') {
+        stage('Deploy') {
             steps {
-                withKubeConfig([credentialsId: 'my-k8s-config']) {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
                     sh """
-                    echo "--- FORCING KUBECTL INSTALL ---"
-                    # Download kubectl to the current folder
+                    echo "--- INSTALLING KUBECTL ---"
                     curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
                     chmod +x ./kubectl
                     
-                    echo "--- DEBUG: CHECKING KUBECTL ---"
-                    ./kubectl version --client
-                    
-                    # --- FIND DEPLOYMENT FILE ---
+                    echo "--- FINDING DEPLOYMENT FILE ---"
                     DEPLOY_FILE=\$(find . -name "deployment.yaml" | head -n 1)
+                    
+                    if [ -z "\$DEPLOY_FILE" ]; then
+                        echo "ERROR: deployment.yaml not found!"
+                        exit 1
+                    fi
+                    
                     WORK_DIR=\$(dirname "\$DEPLOY_FILE")
                     
-                    # --- UPDATE IMAGE ---
+                    echo "--- DEPLOYING ---"
                     sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' "\$DEPLOY_FILE"
                     
-                    # --- DEPLOY USING LOCAL ./kubectl ---
-                    echo "Applying configuration..."
                     ./kubectl apply -f "\$WORK_DIR" -n ${KUBE_NAMESPACE}
-                    
-                    # --- RESTART ---
                     ./kubectl rollout restart deployment/n8n -n ${KUBE_NAMESPACE} || true
                     """
                 }
             }
         }
-
-            }
-        }
+    }
 }
