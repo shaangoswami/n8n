@@ -3,37 +3,32 @@ pipeline {
     environment {
         DOCKER_IMAGE = "shaangoswami/n8n-image"
         DOCKER_TAG = "v1"
-        KUBE_NAMESPACE = "default"
+        // The path ON THE HOST MACHINE where you want to deploy
+        HOST_PATH = "/home/vkpatel/n8n/n8n" 
     }
+
     stages {
-        stage('Checkout') {
+        stage('Deploy via SSH') {
             steps {
-                checkout scm
-            }
-        }
-        stage('Deploy') {
-            steps {
-                withKubeConfig([credentialsId: 'my-k8s-config']) {
+                sshagent(['host-ssh']) { // Use the ID of your SSH credentials
                     sh """
-                    echo "--- INSTALLING KUBECTL ---"
-                    curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
-                    chmod +x ./kubectl
-                    
-                    echo "--- FINDING DEPLOYMENT FILE ---"
-                    DEPLOY_FILE=\$(find . -name "deployment.yaml" | head -n 1)
-                    
-                    if [ -z "\$DEPLOY_FILE" ]; then
-                        echo "ERROR: deployment.yaml not found!"
-                        exit 1
-                    fi
-                    
-                    WORK_DIR=\$(dirname "\$DEPLOY_FILE")
-                    
-                    echo "--- DEPLOYING ---"
-                    sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' "\$DEPLOY_FILE"
-                    
-                    ./kubectl apply -f "\$WORK_DIR" -n ${KUBE_NAMESPACE}
-                    ./kubectl rollout restart deployment/n8n -n ${KUBE_NAMESPACE} || true
+                    # Connect to the host (kc-m1) and run commands there
+                    ssh -o StrictHostKeyChecking=no vkpatel@10.20.4.221 << EOF
+                        
+                        cd ${HOST_PATH}
+                        
+                        echo "--- UPDATING DEPLOYMENT ON HOST ---"
+                        # Update the file directly on the host
+                        sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' deployment.yaml
+                        
+                        echo "--- APPLYING CONFIG ---"
+                        # Use microk8s kubectl which definitely exists on the host
+                        microk8s kubectl apply -f .
+                        
+                        echo "--- RESTARTING ---"
+                        microk8s kubectl rollout restart deployment/n8n
+                        
+                    EOF
                     """
                 }
             }
