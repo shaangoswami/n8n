@@ -13,7 +13,7 @@ pipeline {
         }
         stage('Deploy') {
             steps {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
+                withKubeConfig([credentialsId: 'my-k8s-config']) {
                     sh """
                     echo "--- INSTALLING KUBECTL ---"
                     curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
