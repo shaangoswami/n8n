@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: n8n
-          image: replace-me-image:tag  # Jenkins will replace this
+          image: shaangoswami/n8n-image:v1 
           ports:
             - containerPort: 5678
           env:
